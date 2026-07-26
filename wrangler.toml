@@ -5,4 +5,4 @@ compatibility_date = "2026-07-01"
 # Depois de criar o namespace KV (ver MIGRACAO.md), cole o "id" gerado aqui:
 [[kv_namespaces]]
 binding = "BASES_KV"
-id = "COLE_AQUI_O_ID_DO_NAMESPACE_KV"
+id = "35a1692009004970b5f039fe558acebc"
