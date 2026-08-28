@@ -1,9 +1,9 @@
 [
   {
-    "id": 1,
-    "nome": "Base Teste Local",
-    "token": "TESTE123",
-    "lat": null,
-    "lon": null
+    id: 1,
+    nome: 'Elion - EEEPDJWM',
+    token: 'b8880259-b7b8-4317-add7-f8499b2b331c',
+    lat: -6.404229,
+    lon: -38.877467
   }
 ]
