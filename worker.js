@@ -27,6 +27,22 @@
 
 const KV_KEY_BASES = 'bases';
 
+// ── LISTA FIXA DE BASES (não depende mais do KV) ───────────────────────
+// Edite aqui pra adicionar/remover/atualizar uma estação. Depois de editar,
+// só fazer commit + push que o Cloudflare já redeploya sozinho (Workers
+// Builds). Isso resolve o problema de "perder o banco de dados": a lista
+// agora mora no próprio código, versionada no Git.
+const BASES_FIXAS = [
+    {
+        id: 1,
+        nome: 'Elion - EEEPDJWM',
+        token: 'b8880259-b7b8-4317-add7-f8499b2b331c',
+        lat: -6.404229,
+        lon: -38.877467
+    }
+    // { id: 2, nome: 'Elion - EEEPDJWM 2.0', token: 'COLE_O_TOKEN_AQUI', lat: null, lon: null },
+];
+
 // ── Helpers de resposta ──────────────────────────────────────────────
 function json(data, status = 200, extraHeaders = {}) {
     return new Response(JSON.stringify(data), {
@@ -46,27 +62,15 @@ function notFound(msg = 'Não encontrado') {
 }
 
 // ── Helpers de dados ──────────────────────────────────────────────────
+// Antes buscava do KV; agora vem direto da constante BASES_FIXAS acima.
+// A assinatura "async" e o parâmetro "env" ficaram só pra não precisar
+// mexer no resto do código que já chama essa função.
 async function getAllBases(env) {
-    const raw = await env.BASES_KV.get(KV_KEY_BASES);
-    if (!raw) return [];
-    try {
-        return JSON.parse(raw);
-    } catch {
-        return [];
-    }
-}
-
-async function saveBases(env, bases) {
-    await env.BASES_KV.put(KV_KEY_BASES, JSON.stringify(bases));
+    return BASES_FIXAS;
 }
 
 function getActiveBases(bases) {
     return bases.filter((base) => !base.deleted_at);
-}
-
-function getNextId(items) {
-    const ids = items.map((item) => Number(item.id)).filter((id) => !Number.isNaN(id));
-    return ids.length > 0 ? Math.max(...ids) + 1 : 1;
 }
 
 // ── Cache simples em memória (dura enquanto o isolate do Worker viver) ──
@@ -114,71 +118,22 @@ export default {
                 return json(safe);
             }
 
+            // POST/DELETE de bases foram desativados junto com o KV — a lista
+            // agora é fixa no código (BASES_FIXAS, lá em cima). Pra adicionar,
+            // remover ou editar uma estação, edite essa constante e faça
+            // commit + push. Esses endpoints ficam só avisando isso, caso o
+            // site antigo ainda tente chamá-los.
             if (pathname === '/api/bases' && method === 'POST') {
-                const body = await request.json().catch(() => ({}));
-                const { id, nome, token, lat, lon } = body;
-                if (!nome) return json({ error: 'O nome é obrigatório.' }, 400);
-
-                const latValue = lat !== undefined && lat !== null && lat !== '' ? parseFloat(lat) : null;
-                const lonValue = lon !== undefined && lon !== null && lon !== '' ? parseFloat(lon) : null;
-
-                const bases = await getAllBases(env);
-
-                if (id) {
-                    const idx = bases.findIndex((b) => Number(b.id) === Number(id));
-                    if (idx === -1) return notFound('Base não encontrada.');
-                    bases[idx] = {
-                        ...bases[idx],
-                        nome,
-                        token: token || bases[idx].token,
-                        lat: latValue,
-                        lon: lonValue
-                    };
-                    await saveBases(env, bases);
-                    return json({ id: bases[idx].id, nome, lat: latValue, lon: lonValue });
-                }
-
-                if (!token) return json({ error: 'O token é obrigatório para criação de uma nova base.' }, 400);
-                if (bases.some((b) => b.nome === nome && !b.deleted_at)) {
-                    return json({ error: 'Já existe uma base com esse nome.' }, 409);
-                }
-
-                const newBase = { id: getNextId(bases), nome, token, lat: latValue, lon: lonValue, deleted_at: null };
-                bases.push(newBase);
-                await saveBases(env, bases);
-                return json({ id: newBase.id, nome: newBase.nome, lat: newBase.lat, lon: newBase.lon }, 201);
+                return json({ error: 'Cadastro dinâmico desativado. Edite BASES_FIXAS em worker.js e faça deploy.' }, 410);
             }
 
             const deleteMatch = pathname.match(/^\/api\/bases\/(\d+)$/);
             if (deleteMatch && method === 'DELETE') {
-                const id = parseInt(deleteMatch[1], 10);
-                const body = await request.json().catch(() => ({}));
-
-                if (!env.ADMIN_PASSWORD) return json({ error: 'Senha de administrador não configurada no Worker.' }, 500);
-                if (!body.adminPassword || body.adminPassword !== env.ADMIN_PASSWORD) {
-                    return json({ error: 'Senha de administrador incorreta.' }, 403);
-                }
-
-                const bases = await getAllBases(env);
-                const idx = bases.findIndex((b) => Number(b.id) === id && !b.deleted_at);
-                if (idx === -1) return notFound('Base não encontrada.');
-
-                bases[idx].deleted_at = new Date().toISOString();
-                await saveBases(env, bases);
-                return json({ message: 'Base removida com sucesso.' });
+                return json({ error: 'Remoção dinâmica desativada. Edite BASES_FIXAS em worker.js e faça deploy.' }, 410);
             }
 
             if (pathname === '/api/bases/lixeira' && method === 'GET') {
-                const adminPassword = url.searchParams.get('adminPassword');
-                if (!env.ADMIN_PASSWORD || adminPassword !== env.ADMIN_PASSWORD) {
-                    return json({ error: 'Acesso negado.' }, 403);
-                }
-                const bases = await getAllBases(env);
-                const deleted = bases
-                    .filter((b) => b.deleted_at)
-                    .map((b) => ({ id: b.id, nome: b.nome, lat: b.lat, lon: b.lon, deleted_at: b.deleted_at }))
-                    .sort((a, b) => new Date(b.deleted_at) - new Date(a.deleted_at));
-                return json(deleted);
+                return json([]);
             }
 
             if (pathname === '/api/dados-recentes' && method === 'GET') {

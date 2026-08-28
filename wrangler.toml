@@ -2,7 +2,5 @@ name = "ecobot-api"
 main = "worker.js"
 compatibility_date = "2026-07-01"
 
-# Depois de criar o namespace KV (ver MIGRACAO.md), cole o "id" gerado aqui:
-[[kv_namespaces]]
-binding = "BASES_KV"
-id = "35a1692009004970b5f039fe558acebc"
+# O KV não é mais usado — a lista de bases agora é fixa dentro de worker.js
+# (constante BASES_FIXAS). Não precisa de nenhum binding aqui.
